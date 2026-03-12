@@ -25,7 +25,7 @@ const words = [
   { word: 'Palm Tree', category: 'Nature' }
 ]
 
-function emitRoomData(roomCode) {
+function emitRoomData (roomCode) {
   const room = rooms[roomCode]
   if (!room) return
 
@@ -35,7 +35,7 @@ function emitRoomData(roomCode) {
   })
 }
 
-function getRandomItem(array) {
+function getRandomItem (array) {
   return array[Math.floor(Math.random() * array.length)]
 }
 
@@ -54,7 +54,8 @@ io.on('connection', socket => {
         gameStarted: false,
         currentWord: null,
         currentCategory: null,
-        imposterId: null
+        imposterId: null,
+        drawings: {}
       }
     }
 
@@ -81,6 +82,18 @@ io.on('connection', socket => {
     room.players.push(player)
     socket.join(roomCode)
     socket.data.roomCode = roomCode
+
+    socket.on('submit-drawing', imageData => {
+      const roomCode = socket.data.roomCode
+      if (!roomCode) return
+
+      const room = rooms[roomCode]
+      if (!room || !room.gameStarted) return
+
+      room.drawings[socket.id] = imageData
+
+      console.log(`Drawing submitted by ${socket.id} in room ${roomCode}`)
+    })
 
     emitRoomData(roomCode)
 

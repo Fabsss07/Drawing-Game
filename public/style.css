@@ -21,6 +21,10 @@ body {
   text-align: center;
 }
 
+.panel.wide {
+  width: min(100%, 1000px);
+}
+
 .hidden {
   display: none;
 }
@@ -32,6 +36,15 @@ button {
   margin-top: 12px;
   border-radius: 10px;
   font-size: 1rem;
+}
+
+input[type="color"] {
+  padding: 4px;
+  height: 44px;
+}
+
+input[type="range"] {
+  margin-top: 0;
 }
 
 input {
@@ -50,6 +63,11 @@ button {
 
 button:hover {
   opacity: 0.95;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 ul {
@@ -76,4 +94,30 @@ li {
 #wordText {
   font-size: 1.1rem;
   margin-top: 12px;
+}
+
+.toolbar {
+  display: grid;
+  grid-template-columns: auto 70px auto 1fr 50px auto;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 14px;
+  text-align: left;
+}
+
+canvas {
+  width: 100%;
+  max-width: 900px;
+  background: white;
+  border: 2px solid #374151;
+  border-radius: 12px;
+  display: block;
+  margin: 0 auto;
+  touch-action: none;
+}
+
+@media (max-width: 700px) {
+  .toolbar {
+    grid-template-columns: 1fr;
+  }
 }
