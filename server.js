@@ -55,7 +55,9 @@ io.on('connection', socket => {
         currentWord: null,
         currentCategory: null,
         imposterId: null,
-        drawings: {}
+        drawings: {},
+        submittedPlayers: {},
+        votes: {}
       }
     }
 
@@ -83,6 +85,7 @@ io.on('connection', socket => {
     socket.join(roomCode)
     socket.data.roomCode = roomCode
 
+    
     socket.on('submit-drawing', imageData => {
       const roomCode = socket.data.roomCode
       if (!roomCode) return
@@ -91,14 +94,143 @@ io.on('connection', socket => {
       if (!room || !room.gameStarted) return
 
       room.drawings[socket.id] = imageData
+      room.submittedPlayers[socket.id] = true
+
+      const submittedCount = room.players.filter(
+        player => room.submittedPlayers[player.id]
+      ).length
+      const totalPlayers = room.players.length
+
+      io.to(roomCode).emit('submission-status', {
+        submittedCount,
+        totalPlayers
+      })
+
+    socket.on('cast-vote', votedPlayerId => {
+    const roomCode = socket.data.roomCode
+    if (!roomCode) return
+
+    const room = rooms[roomCode]
+    if (!room || !room.gameStarted) return
+
+    const voterId = socket.id
+
+    const voterExists = room.players.some(player => player.id === voterId)
+    const votedPlayerExists = room.players.some(player => player.id === votedPlayerId)
+
+    if (!voterExists || !votedPlayerExists) return
+    if (voterId === votedPlayerId) return
+
+    room.votes[voterId] = votedPlayerId
+
+    const votesCast = Object.keys(room.votes).length
+    const totalPlayers = room.players.length
+
+    io.to(roomCode).emit('vote-status', {
+        votesCast,
+        totalPlayers
+    })
+
+    const allVoted = room.players.every(player => room.votes[player.id])
+
+    if (allVoted) {
+        const voteCounts = {}
+
+        room.players.forEach(player => {
+        voteCounts[player.id] = 0
+        })
+
+        Object.values(room.votes).forEach(votedId => {
+        if (voteCounts[votedId] !== undefined) {
+            voteCounts[votedId]++
+        }
+        })
+
+        let mostVotes = -1
+        let votedOutPlayerId = null
+        let tie = false
+
+        for (const playerId in voteCounts) {
+        if (voteCounts[playerId] > mostVotes) {
+            mostVotes = voteCounts[playerId]
+            votedOutPlayerId = playerId
+            tie = false
+        } else if (voteCounts[playerId] === mostVotes) {
+            tie = true
+        }
+        }
+
+    const votedOutPlayer = room.players.find(player => player.id === votedOutPlayerId)
+    const imposterPlayer = room.players.find(player => player.id === room.imposterId)
+
+    let winner
+    if (tie) {
+      winner = 'imposter'
+    } else if (votedOutPlayerId === room.imposterId) {
+      winner = 'crewmates'
+    } else {
+      winner = 'imposter'
+    }
+
+    const voteResults = room.players.map(player => {
+      const votedForId = room.votes[player.id]
+      const votedForPlayer = room.players.find(p => p.id === votedForId)
+
+      return {
+        voterName: player.name,
+        votedForName: votedForPlayer ? votedForPlayer.name : 'Nobody'
+      }
+    })
+
+    io.to(roomCode).emit('round-result', {
+      winner,
+      tie,
+      imposterName: imposterPlayer ? imposterPlayer.name : 'Unknown',
+      votedOutName: tie ? null : (votedOutPlayer ? votedOutPlayer.name : null),
+      voteResults
+    })
+  }
+})  
 
       console.log(`Drawing submitted by ${socket.id} in room ${roomCode}`)
+
+      const allSubmitted = room.players.every(
+        player => room.submittedPlayers[player.id]
+      )
+
+      if (allSubmitted) {
+        const revealedDrawings = room.players.map(player => ({
+          playerId: player.id,
+          playerName: player.name,
+          imageData: room.drawings[player.id] || ''
+        }))
+
+        io.to(roomCode).emit('show-voting', revealedDrawings)
+      }
     })
 
     emitRoomData(roomCode)
 
     console.log(`Player ${socket.id} joined ${roomCode}`)
   })
+
+  socket.on('unsubmit-drawing', () => {
+    const roomCode = socket.data.roomCode
+    if (!roomCode) return
+
+    const room = rooms[roomCode]
+    if (!room || !room.gameStarted) return
+
+    room.submittedPlayers[socket.id] = false
+
+    const submittedCount = room.players.filter(player => room.submittedPlayers[player.id]).length
+    const totalPlayers = room.players.length
+
+    io.to(roomCode).emit('submission-status', {
+        submittedCount,
+        totalPlayers
+    })
+})
 
   socket.on('start-game', () => {
     const roomCode = socket.data.roomCode
@@ -116,6 +248,11 @@ io.on('connection', socket => {
       socket.emit('join-error', 'Need at least 2 players to start')
       return
     }
+
+
+    room.votes = {}
+    room.drawings = {}
+    room.submittedPlayers = {}
 
     room.gameStarted = true
 

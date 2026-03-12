@@ -1,58 +1,81 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Imposter Drawing Game</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <main class="app">
-    <section id="joinScreen" class="panel">
-      <h1>Imposter Drawing Game</h1>
-      <p>Join a room to start.</p>
-      <input id="roomInput" type="text" placeholder="Room code" maxlength="12" />
-      <button id="joinBtn">Join Room</button>
-      <p id="joinMessage" class="message"></p>
-    </section>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Imposter Drawing Game</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section id="joinScreen" class="panel">
+        <h1>Imposter Drawing Game</h1>
+        <p>Join a room to start.</p>
+        <input
+          id="roomInput"
+          type="text"
+          placeholder="Room code"
+          maxlength="12"
+        />
+        <button id="joinBtn">Join Room</button>
+        <p id="joinMessage" class="message"></p>
+      </section>
 
-    <section id="lobbyScreen" class="panel hidden">
-      <h2>Lobby</h2>
-      <p>Room: <span id="roomCodeText"></span></p>
-      <p id="hostText"></p>
+      <section id="lobbyScreen" class="panel hidden">
+        <h2>Lobby</h2>
+        <p>Room: <span id="roomCodeText"></span></p>
+        <p id="hostText"></p>
 
-      <h3>Players</h3>
-      <ul id="playerList"></ul>
+        <h3>Players</h3>
+        <ul id="playerList"></ul>
 
-      <button id="startBtn" class="hidden">Start Game</button>
-      <p id="lobbyMessage" class="message"></p>
-    </section>
+        <button id="startBtn" class="hidden">Start Game</button>
+        <p id="lobbyMessage" class="message"></p>
+      </section>
 
-    <section id="gameScreen" class="panel hidden wide">
-      <h2>Draw</h2>
-      <p id="roleText"></p>
-      <p id="categoryText"></p>
-      <p id="wordText"></p>
+      <section id="gameScreen" class="panel hidden wide">
+        <h2>Draw</h2>
+        <p id="roleText"></p>
+        <p id="categoryText"></p>
+        <p id="wordText"></p>
 
-      <div class="toolbar">
-        <label for="colorPicker">Color</label>
-        <input id="colorPicker" type="color" value="#000000" />
+        <div class="toolbar">
+          <label for="colorPicker">Color</label>
+          <input id="colorPicker" type="color" value="#000000" />
 
-        <label for="brushSize">Brush</label>
-        <input id="brushSize" type="range" min="2" max="24" value="6" />
-        <span id="brushSizeValue">6</span>
+          <label for="brushSize">Brush</label>
+          <input id="brushSize" type="range" min="2" max="24" value="6" />
+          <span id="brushSizeValue">6</span>
 
-        <button id="clearBtn" type="button">Clear</button>
-      </div>
+          <button id="clearBtn" type="button">Clear</button>
+        </div>
 
-      <canvas id="drawingCanvas" width="900" height="500"></canvas>
+        <canvas id="drawingCanvas" width="900" height="500"></canvas>
 
-      <button id="submitDrawingBtn">Submit Drawing</button>
-      <p id="gameMessage" class="message"></p>
-    </section>
-  </main>
+        <button id="submitDrawingBtn">Submit Drawing</button>
+        <p id="submissionStatus"></p>
+        <p id="gameMessage" class="message"></p>
+      </section>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="app.js"></script>
-</body>
+      <section id="votingScreen" class="panel hidden wide">
+        <h2>Vote the Imposter</h2>
+        <p id="voteStatus"></p>
+        <div id="drawingsGrid" class="drawings-grid"></div>
+        <p id="voteMessage" class="message"></p>
+      </section>
+
+      <section id="resultScreen" class="panel hidden wide">
+        <h2>Round Result</h2>
+        <p id="winnerText"></p>
+        <p id="imposterRevealText"></p>
+        <p id="votedOutText"></p>
+
+        <h3>Votes</h3>
+        <ul id="voteResultsList"></ul>
+      </section>
+    </main>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+  </body>
 </html>

@@ -121,3 +121,54 @@ canvas {
     grid-template-columns: 1fr;
   }
 }
+
+#submissionStatus {
+  margin-top: 10px;
+  color: #cbd5e1;
+}
+
+.drawings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.drawing-card {
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+}
+
+.drawing-card img {
+  width: 100%;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #374151;
+}
+
+.drawing-card h3 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.vote-btn {
+  margin-top: 10px;
+  background: #f59e0b;
+  color: #1f2937;
+}
+
+.vote-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#voteStatus,
+#winnerText,
+#imposterRevealText,
+#votedOutText {
+  margin-top: 10px;
+  font-size: 1.05rem;
+}

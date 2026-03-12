@@ -27,19 +27,32 @@ const submitDrawingBtn = document.getElementById('submitDrawingBtn')
 const canvas = document.getElementById('drawingCanvas')
 const ctx = canvas.getContext('2d')
 
+const submissionStatus = document.getElementById('submissionStatus')
+const votingScreen = document.getElementById('votingScreen')
+const drawingsGrid = document.getElementById('drawingsGrid')
+
+const voteStatus = document.getElementById('voteStatus')
+const voteMessage = document.getElementById('voteMessage')
+const resultScreen = document.getElementById('resultScreen')
+const winnerText = document.getElementById('winnerText')
+const imposterRevealText = document.getElementById('imposterRevealText')
+const votedOutText = document.getElementById('votedOutText')
+const voteResultsList = document.getElementById('voteResultsList')
+
 let drawing = false
 let hasSubmittedDrawing = false
 let lastX = 0
 let lastY = 0
+let hasVoted = false
 
-function resetCanvas() {
+function resetCanvas () {
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
 }
 
-function getCanvasPosition(event) {
+function getCanvasPosition (event) {
   const rect = canvas.getBoundingClientRect()
   const scaleX = canvas.width / rect.width
   const scaleY = canvas.height / rect.height
@@ -61,9 +74,7 @@ function getCanvasPosition(event) {
   }
 }
 
-function startDrawing(event) {
-  if (hasSubmittedDrawing) return
-
+function startDrawing (event) {
   drawing = true
   const pos = getCanvasPosition(event)
   lastX = pos.x
@@ -71,7 +82,7 @@ function startDrawing(event) {
 }
 
 function draw(event) {
-  if (!drawing || hasSubmittedDrawing) return
+  if (!drawing) return
   event.preventDefault()
 
   const pos = getCanvasPosition(event)
@@ -86,6 +97,14 @@ function draw(event) {
 
   lastX = pos.x
   lastY = pos.y
+
+  if (hasSubmittedDrawing) {
+    hasSubmittedDrawing = false
+    submitDrawingBtn.textContent = 'Submit Drawing'
+    gameMessage.textContent =
+      'You edited your drawing, so you are no longer submitted.'
+    socket.emit('unsubmit-drawing')
+  }
 }
 
 function stopDrawing() {
@@ -118,19 +137,25 @@ brushSize.addEventListener('input', () => {
 })
 
 clearBtn.addEventListener('click', () => {
-  if (hasSubmittedDrawing) return
   resetCanvas()
+
+  if (hasSubmittedDrawing) {
+    hasSubmittedDrawing = false
+    submitDrawingBtn.textContent = 'Submit Drawing'
+    gameMessage.textContent =
+      'You cleared your drawing, so you are no longer submitted.'
+    socket.emit('unsubmit-drawing')
+  }
 })
 
 submitDrawingBtn.addEventListener('click', () => {
-  if (hasSubmittedDrawing) return
-
   const imageData = canvas.toDataURL('image/png')
   socket.emit('submit-drawing', imageData)
 
   hasSubmittedDrawing = true
-  submitDrawingBtn.disabled = true
-  gameMessage.textContent = 'Drawing submitted.'
+  submitDrawingBtn.textContent = 'Submitted'
+  gameMessage.textContent =
+    'You are marked as submitted. You can still edit if you want.'
 })
 
 canvas.addEventListener('mousedown', startDrawing)
@@ -148,7 +173,8 @@ socket.on('room-data', ({ players, hostId }) => {
 
   players.forEach(player => {
     const li = document.createElement('li')
-    li.textContent = player.id === socket.id ? `${player.name} (You)` : player.name
+    li.textContent =
+      player.id === socket.id ? `${player.name} (You)` : player.name
     playerList.appendChild(li)
   })
 
@@ -157,7 +183,9 @@ socket.on('room-data', ({ players, hostId }) => {
     startBtn.classList.remove('hidden')
   } else {
     const hostPlayer = players.find(player => player.id === hostId)
-    hostText.textContent = hostPlayer ? `${hostPlayer.name} is the host` : 'Waiting for host...'
+    hostText.textContent = hostPlayer
+      ? `${hostPlayer.name} is the host`
+      : 'Waiting for host...'
     startBtn.classList.add('hidden')
   }
 })
@@ -176,14 +204,102 @@ socket.on('role-data', ({ role, category, word }) => {
 
 socket.on('game-started', () => {
   lobbyScreen.classList.add('hidden')
+  votingScreen.classList.add('hidden')
+  resultScreen.classList.add('hidden')
   gameScreen.classList.remove('hidden')
 
   hasSubmittedDrawing = false
-  submitDrawingBtn.disabled = false
+  hasVoted = false
+  submitDrawingBtn.textContent = 'Submit Drawing'
   gameMessage.textContent = ''
+  submissionStatus.textContent = ''
+  voteStatus.textContent = ''
+  voteMessage.textContent = ''
+  winnerText.textContent = ''
+  imposterRevealText.textContent = ''
+  votedOutText.textContent = ''
+  voteResultsList.innerHTML = ''
   brushSizeValue.textContent = brushSize.value
+  drawingsGrid.innerHTML = ''
 
   resetCanvas()
+})
+
+socket.on('submission-status', ({ submittedCount, totalPlayers }) => {
+  submissionStatus.textContent = `${submittedCount}/${totalPlayers} players submitted`
+})
+
+socket.on('show-voting', revealedDrawings => {
+  gameScreen.classList.add('hidden')
+  resultScreen.classList.add('hidden')
+  votingScreen.classList.remove('hidden')
+
+  drawingsGrid.innerHTML = ''
+  voteMessage.textContent = ''
+  voteStatus.textContent = '0 votes submitted'
+  hasVoted = false
+
+  revealedDrawings.forEach(drawing => {
+    const card = document.createElement('div')
+    card.className = 'drawing-card'
+
+    const title = document.createElement('h3')
+    title.textContent = drawing.playerName
+
+    const image = document.createElement('img')
+    image.src = drawing.imageData
+    image.alt = `${drawing.playerName} drawing`
+
+    const voteBtn = document.createElement('button')
+    voteBtn.className = 'vote-btn'
+    voteBtn.textContent = 'Vote'
+    voteBtn.disabled = drawing.playerId === socket.id
+
+    voteBtn.addEventListener('click', () => {
+      if (hasVoted) return
+
+      socket.emit('cast-vote', drawing.playerId)
+      hasVoted = true
+      voteMessage.textContent = `You voted for ${drawing.playerName}.`
+      
+      document.querySelectorAll('.vote-btn').forEach(btn => {
+        btn.disabled = true
+      })
+    })
+
+    card.appendChild(title)
+    card.appendChild(image)
+    card.appendChild(voteBtn)
+    drawingsGrid.appendChild(card)
+  })
+})
+
+socket.on('vote-status', ({ votesCast, totalPlayers }) => {
+  voteStatus.textContent = `${votesCast}/${totalPlayers} votes submitted`
+})
+
+socket.on('round-result', ({ winner, tie, imposterName, votedOutName, voteResults }) => {
+  votingScreen.classList.add('hidden')
+  resultScreen.classList.remove('hidden')
+
+  winnerText.textContent =
+    winner === 'crewmates' ? 'Crewmates win!' : 'Imposter wins!'
+
+  imposterRevealText.textContent = `The imposter was: ${imposterName}`
+
+  if (tie) {
+    votedOutText.textContent = 'It was a tie, so nobody was voted out.'
+  } else {
+    votedOutText.textContent = `Voted out: ${votedOutName}`
+  }
+
+  voteResultsList.innerHTML = ''
+
+  voteResults.forEach(result => {
+    const li = document.createElement('li')
+    li.textContent = `${result.voterName} voted for ${result.votedForName}`
+    voteResultsList.appendChild(li)
+  })
 })
 
 socket.on('join-error', message => {
