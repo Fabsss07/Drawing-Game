@@ -1,20 +1,19 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Imposter Drawing Game</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
 <body>
-  <main class="app">
-    <h1>Imposter Drawing Game</h1>
-    <p>Base setup is working.</p>
-    <button id="testBtn">Test socket</button>
-    <p id="status">Not connected yet.</p>
-  </main>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="app.js"></script>
+<h1>Imposter Drawing Game</h1>
+
+<div id="joinScreen">
+  <input id="roomInput" placeholder="Room code">
+  <button id="joinBtn">Join Room</button>
+</div>
+
+<div id="lobby" style="display:none;">
+  <h2>Lobby</h2>
+  <p>Players:</p>
+  <ul id="playerList"></ul>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+
 </body>
-</html>
