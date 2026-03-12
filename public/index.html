@@ -1,19 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Imposter Drawing Game</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
 <body>
+  <main class="app">
+    <section id="joinScreen" class="panel">
+      <h1>Imposter Drawing Game</h1>
+      <p>Join a room to start.</p>
+      <input id="roomInput" type="text" placeholder="Room code" maxlength="12" />
+      <button id="joinBtn">Join Room</button>
+      <p id="joinMessage" class="message"></p>
+    </section>
 
-<h1>Imposter Drawing Game</h1>
+    <section id="lobbyScreen" class="panel hidden">
+      <h2>Lobby</h2>
+      <p>Room: <span id="roomCodeText"></span></p>
+      <p id="hostText"></p>
 
-<div id="joinScreen">
-  <input id="roomInput" placeholder="Room code">
-  <button id="joinBtn">Join Room</button>
-</div>
+      <h3>Players</h3>
+      <ul id="playerList"></ul>
 
-<div id="lobby" style="display:none;">
-  <h2>Lobby</h2>
-  <p>Players:</p>
-  <ul id="playerList"></ul>
-</div>
+      <button id="startBtn" class="hidden">Start Game</button>
+      <p id="lobbyMessage" class="message"></p>
+    </section>
 
-<script src="/socket.io/socket.io.js"></script>
-<script src="app.js"></script>
+    <section id="gameScreen" class="panel hidden">
+      <h2>Game Started</h2>
+      <p id="roleText"></p>
+      <p id="categoryText"></p>
+      <p id="wordText"></p>
+    </section>
+  </main>
 
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
 </body>
+</html>
