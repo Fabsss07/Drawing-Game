@@ -15,8 +15,8 @@ const startBtn = document.getElementById('startBtn')
 const lobbyMessage = document.getElementById('lobbyMessage')
 
 const roleText = document.getElementById('roleText')
-const categoryText = document.getElementById('categoryText')
-const wordText = document.getElementById('wordText')
+const promptText = document.getElementById('promptText')
+const timerText = document.getElementById('timerText')
 const gameMessage = document.getElementById('gameMessage')
 
 const colorPicker = document.getElementById('colorPicker')
@@ -44,12 +44,14 @@ let hasSubmittedDrawing = false
 let lastX = 0
 let lastY = 0
 let hasVoted = false
+let latestCanvasImageData = ''
 
 function resetCanvas () {
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
+  latestCanvasImageData = canvas.toDataURL('image/jpeg', 0.8)
 }
 
 function getCanvasPosition (event) {
@@ -97,6 +99,8 @@ function draw(event) {
 
   lastX = pos.x
   lastY = pos.y
+
+  latestCanvasImageData = canvas.toDataURL('image/jpeg', 0.8)
 
   if (hasSubmittedDrawing) {
     hasSubmittedDrawing = false
@@ -149,8 +153,7 @@ clearBtn.addEventListener('click', () => {
 })
 
 submitDrawingBtn.addEventListener('click', () => {
-  const imageData = canvas.toDataURL('image/png')
-  socket.emit('submit-drawing', imageData)
+  socket.emit('submit-drawing', latestCanvasImageData)
 
   hasSubmittedDrawing = true
   submitDrawingBtn.textContent = 'Submitted'
@@ -190,15 +193,21 @@ socket.on('room-data', ({ players, hostId }) => {
   }
 })
 
-socket.on('role-data', ({ role, category, word }) => {
+socket.on('role-data', ({ role, word, hint }) => {
   if (role === 'imposter') {
     roleText.textContent = 'Role: Imposter'
-    categoryText.textContent = `Category: ${category}`
-    wordText.textContent = 'Secret word: ???'
+    promptText.textContent = `Hint: ${hint}`
   } else {
     roleText.textContent = 'Role: Crewmate'
-    categoryText.textContent = `Category: ${category}`
-    wordText.textContent = `Secret word: ${word}`
+    promptText.textContent = `Word: ${word}`
+  }
+})
+
+socket.on('timer-update', secondsLeft => {
+  timerText.textContent = `Time left: ${secondsLeft}s`
+
+  if (secondsLeft <= 0) {
+    gameMessage.textContent = 'Time is up! Submitting automatically...'
   }
 })
 
@@ -219,8 +228,9 @@ socket.on('game-started', () => {
   imposterRevealText.textContent = ''
   votedOutText.textContent = ''
   voteResultsList.innerHTML = ''
-  brushSizeValue.textContent = brushSize.value
   drawingsGrid.innerHTML = ''
+  brushSizeValue.textContent = brushSize.value
+  timerText.textContent = 'Time left: 30s'
 
   resetCanvas()
 })
@@ -230,6 +240,7 @@ socket.on('submission-status', ({ submittedCount, totalPlayers }) => {
 })
 
 socket.on('show-voting', revealedDrawings => {
+  drawing = false
   gameScreen.classList.add('hidden')
   resultScreen.classList.add('hidden')
   votingScreen.classList.remove('hidden')
@@ -300,6 +311,15 @@ socket.on('round-result', ({ winner, tie, imposterName, votedOutName, voteResult
     li.textContent = `${result.voterName} voted for ${result.votedForName}`
     voteResultsList.appendChild(li)
   })
+})
+
+socket.on('force-submit-request', () => {
+  socket.emit('submit-drawing', latestCanvasImageData)
+
+  hasSubmittedDrawing = true
+  drawing = false
+  submitDrawingBtn.textContent = 'Submitted'
+  gameMessage.textContent = 'Time is up! Your drawing was submitted automatically.'
 })
 
 socket.on('join-error', message => {
