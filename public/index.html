@@ -33,13 +33,13 @@
         <p id="lobbyMessage" class="message"></p>
       </section>
 
-      <section id="gameScreen" class="panel hidden wide">
-        <h2>Draw</h2>
-        <p id="roleText"></p>
-        <p id="promptText"></p>
-        <p id="timerText"></p>
+      <section id="gameScreen" class="panel hidden wide game-intro">
+        <h2 class="intro-item intro-delay-1">Draw</h2>
+        <p id="roleText" class="intro-item intro-delay-1"></p>
+        <p id="promptText" class="intro-item intro-delay-2"></p>
+        <p id="timerText" class="intro-item intro-delay-2"></p>
 
-        <div class="toolbar">
+        <div class="toolbar intro-item intro-delay-3">
           <label for="colorPicker">Color</label>
           <input id="colorPicker" type="color" value="#000000" />
 
@@ -50,15 +50,23 @@
           <button id="clearBtn" type="button">Clear</button>
         </div>
 
-        <canvas id="drawingCanvas" width="900" height="500"></canvas>
+        <canvas
+          id="drawingCanvas"
+          class="intro-item intro-delay-4"
+          width="900"
+          height="500"
+        ></canvas>
 
-        <button id="submitDrawingBtn">Submit Drawing</button>
-        <p id="submissionStatus"></p>
-        <p id="gameMessage" class="message"></p>
+        <button id="submitDrawingBtn" class="intro-item intro-delay-5">
+          Submit Drawing
+        </button>
+        <p id="submissionStatus" class="intro-item intro-delay-5"></p>
+        <p id="gameMessage" class="message intro-item intro-delay-5"></p>
       </section>
 
       <section id="votingScreen" class="panel hidden wide">
         <h2>Vote the Imposter</h2>
+        <p id="votingWordText"></p>
         <p id="voteStatus"></p>
         <div id="drawingsGrid" class="drawings-grid"></div>
         <p id="voteMessage" class="message"></p>
@@ -69,13 +77,21 @@
         <p id="winnerText"></p>
         <p id="imposterRevealText"></p>
         <p id="votedOutText"></p>
-        <button id="rematchBtn" class="hidden">Rematch</button>
-        <button id="mainMenuBtn">Return to Main Menu</button>
 
         <h3>Votes</h3>
         <ul id="voteResultsList"></ul>
+
+        <button id="rematchBtn" class="hidden">Rematch</button>
+        <button id="mainMenuBtn">Return to Main Menu</button>
       </section>
     </main>
+
+    <div id="roleRevealOverlay" class="role-reveal hidden">
+      <div class="role-reveal-content">
+        <h1 id="roleRevealTitle"></h1>
+        <p id="roleRevealPrompt"></p>
+      </div>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="app.js"></script>

@@ -40,6 +40,11 @@ const votedOutText = document.getElementById('votedOutText')
 const voteResultsList = document.getElementById('voteResultsList')
 const rematchBtn = document.getElementById('rematchBtn')
 const mainMenuBtn = document.getElementById('mainMenuBtn')
+const votingWordText = document.getElementById('votingWordText')
+const app = document.querySelector('.app')
+const roleRevealOverlay = document.getElementById('roleRevealOverlay')
+const roleRevealTitle = document.getElementById('roleRevealTitle')
+const roleRevealPrompt = document.getElementById('roleRevealPrompt')
 
 let drawing = false
 let hasSubmittedDrawing = false
@@ -48,6 +53,10 @@ let lastY = 0
 let hasVoted = false
 let latestCanvasImageData = ''
 let playerStatus = 'lobby'
+let currentRole = null
+let currentWord = null
+let currentHint = null
+let roleRevealDone = false
 
 function resetCanvas () {
   ctx.fillStyle = '#ffffff'
@@ -65,6 +74,91 @@ mainMenuBtn.addEventListener('click', () => {
   window.location.reload()
 })
 
+function getVisiblePanel () {
+  const panels = [
+    joinScreen,
+    lobbyScreen,
+    gameScreen,
+    votingScreen,
+    resultScreen
+  ]
+  return panels.find(panel => !panel.classList.contains('hidden')) || null
+}
+
+function playGameIntro () {
+  gameScreen.classList.remove('play-intro')
+  void gameScreen.offsetWidth
+  gameScreen.classList.add('play-intro')
+}
+
+function showRoleRevealSequence () {
+  const visiblePanel = getVisiblePanel()
+
+  roleRevealTitle.classList.remove('visible', 'role-imposter', 'role-crewmate')
+  roleRevealPrompt.classList.remove('visible')
+  roleRevealOverlay.classList.remove('hidden', 'fade-out')
+
+  if (!roleRevealDone) {
+    if (currentRole === 'imposter') {
+      roleRevealTitle.textContent = 'IMPOSTER'
+      roleRevealTitle.classList.add('role-imposter')
+      roleRevealPrompt.textContent = `Hint: ${currentHint}`
+    } else {
+      roleRevealTitle.textContent = 'CREWMATE'
+      roleRevealTitle.classList.add('role-crewmate')
+      roleRevealPrompt.textContent = currentWord
+    }
+  } else {
+    roleRevealTitle.textContent = currentRole === 'imposter' ? `Hint` : `Word`
+
+    roleRevealTitle.classList.add('role-crewmate')
+
+    roleRevealPrompt.textContent =
+      currentRole === 'imposter' ? currentHint : currentWord
+  }
+
+  if (visiblePanel) {
+    visiblePanel.classList.add('fading-out')
+  }
+
+  setTimeout(() => {
+    if (visiblePanel) {
+      visiblePanel.classList.add('hidden')
+      visiblePanel.classList.remove('fading-out')
+    }
+
+    roleRevealTitle.classList.add('visible')
+  }, 700)
+
+  setTimeout(
+    () => {
+      roleRevealPrompt.classList.add('visible')
+    },
+    roleRevealDone ? 1000 : 1900
+  )
+
+  setTimeout(
+    () => {
+      roleRevealTitle.classList.remove('visible')
+      roleRevealPrompt.classList.remove('visible')
+      roleRevealOverlay.classList.add('fade-out')
+    },
+    roleRevealDone ? 3200 : 4300
+  )
+
+  setTimeout(
+    () => {
+      roleRevealOverlay.classList.add('hidden')
+      roleRevealOverlay.classList.remove('fade-out')
+
+      gameScreen.classList.remove('hidden')
+      playGameIntro()
+
+      roleRevealDone = true
+    },
+    roleRevealDone ? 3900 : 5150
+  )
+}
 
 function getCanvasPosition (event) {
   const rect = canvas.getBoundingClientRect()
@@ -126,6 +220,37 @@ function draw (event) {
 
 function stopDrawing () {
   drawing = false
+}
+
+function showRoleReveal () {
+  app.classList.add('fade-out')
+  roleRevealOverlay.classList.remove('hidden', 'fade-out')
+  roleRevealTitle.classList.remove('role-imposter', 'role-crewmate')
+
+  if (playerStatus === 'spectator') {
+    roleRevealTitle.textContent = 'SPECTATOR'
+    roleRevealTitle.classList.add('role-crewmate')
+    roleRevealPrompt.textContent = 'Watch the round.'
+  } else if (currentRole === 'imposter') {
+    roleRevealTitle.textContent = 'IMPOSTER'
+    roleRevealTitle.classList.add('role-imposter')
+    roleRevealPrompt.textContent = `Hint: ${currentHint}`
+  } else {
+    roleRevealTitle.textContent = 'CREWMATE'
+    roleRevealTitle.classList.add('role-crewmate')
+    roleRevealPrompt.textContent = currentWord
+  }
+
+  setTimeout(() => {
+    roleRevealOverlay.classList.add('fade-out')
+
+    setTimeout(() => {
+      roleRevealOverlay.classList.add('hidden')
+      roleRevealOverlay.classList.remove('fade-out')
+      app.classList.remove('fade-out')
+      gameScreen.classList.remove('hidden')
+    }, 450)
+  }, 1800)
 }
 
 joinBtn.addEventListener('click', () => {
@@ -212,6 +337,9 @@ socket.on('room-data', ({ players, hostId }) => {
 
 socket.on('role-data', ({ role, status, word, hint }) => {
   playerStatus = status
+  currentRole = role
+  currentWord = word
+  currentHint = hint
 
   if (status === 'spectator') {
     roleText.textContent = 'You are a spectator'
@@ -236,15 +364,21 @@ socket.on('timer-update', secondsLeft => {
   }
 })
 
-socket.on('game-started', () => {
-  lobbyScreen.classList.add('hidden')
-  votingScreen.classList.add('hidden')
-  resultScreen.classList.add('hidden')
-  gameScreen.classList.remove('hidden')
+socket.on('game-started', (data = {}) => {
+  const round = data.round ?? 1
 
   hasSubmittedDrawing = false
   hasVoted = false
+  drawing = false
+
+  if (round === 1) {
+    roleRevealDone = false
+  }
+
   submitDrawingBtn.textContent = 'Submit Drawing'
+  submitDrawingBtn.disabled = playerStatus !== 'active'
+  clearBtn.disabled = playerStatus !== 'active'
+
   gameMessage.textContent = ''
   submissionStatus.textContent = ''
   voteStatus.textContent = ''
@@ -256,17 +390,17 @@ socket.on('game-started', () => {
   drawingsGrid.innerHTML = ''
   brushSizeValue.textContent = brushSize.value
   timerText.textContent = 'Time left: 30s'
-  submitDrawingBtn.disabled = playerStatus !== 'active'
-  clearBtn.disabled = playerStatus !== 'active'
+  votingWordText.textContent = ''
 
   resetCanvas()
+  showRoleRevealSequence()
 })
 
 socket.on('submission-status', ({ submittedCount, totalPlayers }) => {
   submissionStatus.textContent = `${submittedCount}/${totalPlayers} players submitted`
 })
 
-socket.on('show-voting', revealedDrawings => {
+socket.on('show-voting', ({ drawings, actualWord }) => {
   drawing = false
   gameScreen.classList.add('hidden')
   resultScreen.classList.add('hidden')
@@ -275,30 +409,33 @@ socket.on('show-voting', revealedDrawings => {
   drawingsGrid.innerHTML = ''
   voteMessage.textContent = ''
   voteStatus.textContent = '0 votes submitted'
+  votingWordText.textContent = actualWord
   hasVoted = false
 
-  revealedDrawings.forEach(drawing => {
+  drawings.forEach(drawingData => {
     const card = document.createElement('div')
     card.className = 'drawing-card'
 
     const title = document.createElement('h3')
-    title.textContent = drawing.playerName
+    title.textContent = drawingData.playerName
 
     const image = document.createElement('img')
-    image.src = drawing.imageData
-    image.alt = `${drawing.playerName} drawing`
+    image.src = drawingData.imageData
+    image.alt = `${drawingData.playerName} drawing`
 
     const voteBtn = document.createElement('button')
     voteBtn.className = 'vote-btn'
     voteBtn.textContent = 'Vote'
-    voteBtn.disabled = drawing.playerId === socket.id
+    voteBtn.disabled =
+      drawingData.playerId === socket.id || playerStatus !== 'active'
 
     voteBtn.addEventListener('click', () => {
       if (hasVoted) return
+      if (playerStatus !== 'active') return
 
-      socket.emit('cast-vote', drawing.playerId)
+      socket.emit('cast-vote', drawingData.playerId)
       hasVoted = true
-      voteMessage.textContent = `You voted for ${drawing.playerName}.`
+      voteMessage.textContent = `You voted for ${drawingData.playerName}.`
 
       document.querySelectorAll('.vote-btn').forEach(btn => {
         btn.disabled = true

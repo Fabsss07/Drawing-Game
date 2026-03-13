@@ -25,7 +25,7 @@ const prompts = [
   { word: 'School Item', hint: 'Used for learning' }
 ]
 
-function emitRoomData (roomCode) {
+function emitRoomData(roomCode) {
   const room = rooms[roomCode]
   if (!room) return
 
@@ -35,23 +35,23 @@ function emitRoomData (roomCode) {
   })
 }
 
-function getRandomItem (array) {
+function getRandomItem(array) {
   return array[Math.floor(Math.random() * array.length)]
 }
 
-function getActivePlayers (room) {
+function getActivePlayers(room) {
   return room.players.filter(player => player.status === 'active')
 }
 
-function findPlayer (room, playerId) {
+function findPlayer(room, playerId) {
   return room.players.find(player => player.id === playerId)
 }
 
-function getBlankCanvasDataUrl () {
+function getBlankCanvasDataUrl() {
   return 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 }
 
-function emitSubmissionStatus (roomCode) {
+function emitSubmissionStatus(roomCode) {
   const room = rooms[roomCode]
   if (!room) return
 
@@ -65,7 +65,7 @@ function emitSubmissionStatus (roomCode) {
   })
 }
 
-function revealVoting (roomCode) {
+function revealVoting(roomCode) {
   const room = rooms[roomCode]
   if (!room) return
   if (room.phase !== 'drawing' && room.phase !== 'force-submit') return
@@ -85,10 +85,13 @@ function revealVoting (roomCode) {
     imageData: room.drawings[player.id] || getBlankCanvasDataUrl()
   }))
 
-  io.to(roomCode).emit('show-voting', revealedDrawings)
+  io.to(roomCode).emit('show-voting', {
+    drawings: revealedDrawings,
+    actualWord: room.currentWord
+  })
 }
 
-function maybeRevealVoting (roomCode) {
+function maybeRevealVoting(roomCode) {
   const room = rooms[roomCode]
   if (!room) return
   if (room.phase !== 'drawing' && room.phase !== 'force-submit') return
@@ -103,7 +106,7 @@ function maybeRevealVoting (roomCode) {
   }
 }
 
-function startRoundTimer (roomCode) {
+function startRoundTimer(roomCode) {
   const room = rooms[roomCode]
   if (!room) return
 
@@ -132,10 +135,12 @@ function startRoundTimer (roomCode) {
   }, 1000)
 }
 
-function startNextRound (roomCode) {
+function startNextRound(roomCode) {
   const room = rooms[roomCode]
   if (!room) return
   if (!room.gameStarted) return
+
+  room.round++
 
   const activePlayers = getActivePlayers(room)
 
@@ -178,12 +183,12 @@ function startNextRound (roomCode) {
     })
   })
 
-  io.to(roomCode).emit('game-started')
+  io.to(roomCode).emit('game-started', { round: room.round })
   emitSubmissionStatus(roomCode)
   startRoundTimer(roomCode)
 }
 
-function finishVoting (roomCode) {
+function finishVoting(roomCode) {
   const room = rooms[roomCode]
   if (!room) return
 
@@ -234,11 +239,7 @@ function finishVoting (roomCode) {
     player => player.id === room.imposterId
   )
 
-  if (
-    !matchWinner &&
-    imposterStillAlive &&
-    remainingActivePlayers.length <= 2
-  ) {
+  if (!matchWinner && imposterStillAlive && remainingActivePlayers.length <= 2) {
     matchWinner = 'imposter'
   }
 
@@ -287,6 +288,7 @@ io.on('connection', socket => {
       return
     }
 
+    room.round = 1
     room.gameStarted = true
     room.phase = 'drawing'
     room.drawings = {}
@@ -325,7 +327,7 @@ io.on('connection', socket => {
       })
     })
 
-    io.to(roomCode).emit('game-started')
+    io.to(roomCode).emit('game-started', { round: room.round })
     emitSubmissionStatus(roomCode)
     startRoundTimer(roomCode)
   })
@@ -347,7 +349,8 @@ io.on('connection', socket => {
         votes: {},
         timerSeconds: 30,
         timerInterval: null,
-        phase: 'lobby'
+        phase: 'lobby',
+        round: 0
       }
     }
 
@@ -397,6 +400,7 @@ io.on('connection', socket => {
       return
     }
 
+    room.round = 1
     room.gameStarted = true
     room.phase = 'drawing'
     room.drawings = {}
@@ -429,7 +433,7 @@ io.on('connection', socket => {
       })
     })
 
-    io.to(roomCode).emit('game-started')
+    io.to(roomCode).emit('game-started', { round: room.round })
     emitSubmissionStatus(roomCode)
     startRoundTimer(roomCode)
   })

@@ -19,10 +19,19 @@ body {
   border-radius: 16px;
   padding: 24px;
   text-align: center;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.7s ease, transform 0.7s ease;
 }
 
 .panel.wide {
   width: min(100%, 1000px);
+}
+
+.panel.fading-out {
+  opacity: 0;
+  transform: translateY(14px);
+  pointer-events: none;
 }
 
 .hidden {
@@ -90,10 +99,15 @@ li {
 }
 
 #roleText,
-#categoryText,
-#wordText {
+#promptText,
+#timerText {
   font-size: 1.1rem;
   margin-top: 12px;
+}
+
+#timerText {
+  color: #fbbf24;
+  font-weight: bold;
 }
 
 .toolbar {
@@ -173,13 +187,136 @@ canvas {
   font-size: 1.05rem;
 }
 
-#promptText,
-#timerText {
-  font-size: 1.1rem;
-  margin-top: 12px;
+#votingWordText {
+  margin: 8px 0 18px;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-weight: 800;
+  color: white;
+  text-align: center;
 }
 
-#timerText {
-  color: #fbbf24;
-  font-weight: bold;
+/* ROLE REVEAL */
+
+.role-reveal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111827;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.8s ease;
+}
+
+.role-reveal.hidden {
+  display: none;
+}
+
+.role-reveal.fade-out {
+  opacity: 0;
+}
+
+.role-reveal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+#roleRevealTitle,
+#roleRevealPrompt {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.9s ease, transform 0.9s ease;
+  text-align: center;
+}
+
+#roleRevealTitle.visible,
+#roleRevealPrompt.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#roleRevealTitle {
+  margin: 0;
+  font-size: clamp(2.8rem, 8vw, 5.5rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#roleRevealPrompt {
+  margin-top: 18px;
+  font-size: clamp(1.3rem, 3vw, 2rem);
+  color: white;
+  font-weight: 500;
+}
+
+.role-imposter {
+  color: #ef4444;
+}
+
+.role-crewmate {
+  color: white;
+}
+
+/* GAME INTRO ANIMATION */
+
+.game-intro .intro-item {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+.game-intro.play-intro .intro-item {
+  animation: introSlideUp 0.7s ease forwards;
+}
+
+.game-intro.play-intro .intro-delay-1 {
+  animation-delay: 0.05s;
+}
+
+.game-intro.play-intro .intro-delay-2 {
+  animation-delay: 0.18s;
+}
+
+.game-intro.play-intro .intro-delay-3 {
+  animation-delay: 0.32s;
+}
+
+.game-intro.play-intro .intro-delay-4 {
+  animation-delay: 0.48s;
+}
+
+.game-intro.play-intro .intro-delay-5 {
+  animation-delay: 0.62s;
+}
+
+.game-intro.play-intro #drawingCanvas {
+  animation: canvasReveal 0.95s ease forwards;
+}
+
+@keyframes introSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes canvasReveal {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.985);
+    clip-path: inset(0 100% 0 0 round 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    clip-path: inset(0 0 0 0 round 12px);
+  }
 }
