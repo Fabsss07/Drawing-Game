@@ -38,6 +38,8 @@ const winnerText = document.getElementById('winnerText')
 const imposterRevealText = document.getElementById('imposterRevealText')
 const votedOutText = document.getElementById('votedOutText')
 const voteResultsList = document.getElementById('voteResultsList')
+const rematchBtn = document.getElementById('rematchBtn')
+const mainMenuBtn = document.getElementById('mainMenuBtn')
 
 let drawing = false
 let hasSubmittedDrawing = false
@@ -45,6 +47,7 @@ let lastX = 0
 let lastY = 0
 let hasVoted = false
 let latestCanvasImageData = ''
+let playerStatus = 'lobby'
 
 function resetCanvas () {
   ctx.fillStyle = '#ffffff'
@@ -53,6 +56,15 @@ function resetCanvas () {
   ctx.lineJoin = 'round'
   latestCanvasImageData = canvas.toDataURL('image/jpeg', 0.8)
 }
+
+rematchBtn.addEventListener('click', () => {
+  socket.emit('rematch')
+})
+
+mainMenuBtn.addEventListener('click', () => {
+  window.location.reload()
+})
+
 
 function getCanvasPosition (event) {
   const rect = canvas.getBoundingClientRect()
@@ -77,13 +89,14 @@ function getCanvasPosition (event) {
 }
 
 function startDrawing (event) {
+  if (playerStatus !== 'active') return
   drawing = true
   const pos = getCanvasPosition(event)
   lastX = pos.x
   lastY = pos.y
 }
 
-function draw(event) {
+function draw (event) {
   if (!drawing) return
   event.preventDefault()
 
@@ -111,7 +124,7 @@ function draw(event) {
   }
 }
 
-function stopDrawing() {
+function stopDrawing () {
   drawing = false
 }
 
@@ -141,6 +154,8 @@ brushSize.addEventListener('input', () => {
 })
 
 clearBtn.addEventListener('click', () => {
+  if (playerStatus !== 'active') return
+
   resetCanvas()
 
   if (hasSubmittedDrawing) {
@@ -153,6 +168,8 @@ clearBtn.addEventListener('click', () => {
 })
 
 submitDrawingBtn.addEventListener('click', () => {
+  if (playerStatus !== 'active') return
+
   socket.emit('submit-drawing', latestCanvasImageData)
 
   hasSubmittedDrawing = true
@@ -193,7 +210,15 @@ socket.on('room-data', ({ players, hostId }) => {
   }
 })
 
-socket.on('role-data', ({ role, word, hint }) => {
+socket.on('role-data', ({ role, status, word, hint }) => {
+  playerStatus = status
+
+  if (status === 'spectator') {
+    roleText.textContent = 'You are a spectator'
+    promptText.textContent = 'Wait and watch the round.'
+    return
+  }
+
   if (role === 'imposter') {
     roleText.textContent = 'Role: Imposter'
     promptText.textContent = `Hint: ${hint}`
@@ -231,6 +256,8 @@ socket.on('game-started', () => {
   drawingsGrid.innerHTML = ''
   brushSizeValue.textContent = brushSize.value
   timerText.textContent = 'Time left: 30s'
+  submitDrawingBtn.disabled = playerStatus !== 'active'
+  clearBtn.disabled = playerStatus !== 'active'
 
   resetCanvas()
 })
@@ -272,7 +299,7 @@ socket.on('show-voting', revealedDrawings => {
       socket.emit('cast-vote', drawing.playerId)
       hasVoted = true
       voteMessage.textContent = `You voted for ${drawing.playerName}.`
-      
+
       document.querySelectorAll('.vote-btn').forEach(btn => {
         btn.disabled = true
       })
@@ -289,29 +316,49 @@ socket.on('vote-status', ({ votesCast, totalPlayers }) => {
   voteStatus.textContent = `${votesCast}/${totalPlayers} votes submitted`
 })
 
-socket.on('round-result', ({ winner, tie, imposterName, votedOutName, voteResults }) => {
-  votingScreen.classList.add('hidden')
-  resultScreen.classList.remove('hidden')
+socket.on(
+  'round-result',
+  ({
+    tie,
+    matchWinner,
+    imposterName,
+    votedOutName,
+    voteResults,
+    remainingActiveCount
+  }) => {
+    votingScreen.classList.add('hidden')
+    resultScreen.classList.remove('hidden')
 
-  winnerText.textContent =
-    winner === 'crewmates' ? 'Crewmates win!' : 'Imposter wins!'
+    if (matchWinner === 'crewmates') {
+      winnerText.textContent = 'Crewmates win the match!'
+      rematchBtn.classList.remove('hidden')
+    } else if (matchWinner === 'imposter') {
+      winnerText.textContent = 'Imposter wins the match!'
+      rematchBtn.classList.remove('hidden')
+    } else {
+      winnerText.textContent = 'Next round starting soon...'
+      rematchBtn.classList.add('hidden')
+    }
 
-  imposterRevealText.textContent = `The imposter was: ${imposterName}`
+    imposterRevealText.textContent = `The imposter is: ${imposterName}`
 
-  if (tie) {
-    votedOutText.textContent = 'It was a tie, so nobody was voted out.'
-  } else {
-    votedOutText.textContent = `Voted out: ${votedOutName}`
+    if (tie) {
+      votedOutText.textContent = `Tie vote. Nobody was eliminated. ${remainingActiveCount} active players remain.`
+    } else {
+      votedOutText.textContent = votedOutName
+        ? `${votedOutName} was eliminated. ${remainingActiveCount} active players remain.`
+        : `${remainingActiveCount} active players remain.`
+    }
+
+    voteResultsList.innerHTML = ''
+
+    voteResults.forEach(result => {
+      const li = document.createElement('li')
+      li.textContent = `${result.voterName} voted for ${result.votedForName}`
+      voteResultsList.appendChild(li)
+    })
   }
-
-  voteResultsList.innerHTML = ''
-
-  voteResults.forEach(result => {
-    const li = document.createElement('li')
-    li.textContent = `${result.voterName} voted for ${result.votedForName}`
-    voteResultsList.appendChild(li)
-  })
-})
+)
 
 socket.on('force-submit-request', () => {
   socket.emit('submit-drawing', latestCanvasImageData)
@@ -319,7 +366,8 @@ socket.on('force-submit-request', () => {
   hasSubmittedDrawing = true
   drawing = false
   submitDrawingBtn.textContent = 'Submitted'
-  gameMessage.textContent = 'Time is up! Your drawing was submitted automatically.'
+  gameMessage.textContent =
+    'Time is up! Your drawing was submitted automatically.'
 })
 
 socket.on('join-error', message => {

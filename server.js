@@ -25,7 +25,7 @@ const prompts = [
   { word: 'School Item', hint: 'Used for learning' }
 ]
 
-function emitRoomData(roomCode) {
+function emitRoomData (roomCode) {
   const room = rooms[roomCode]
   if (!room) return
 
@@ -35,29 +35,37 @@ function emitRoomData(roomCode) {
   })
 }
 
-function getRandomItem(array) {
+function getRandomItem (array) {
   return array[Math.floor(Math.random() * array.length)]
 }
 
-function getSubmittedCount(room) {
-  return room.players.filter(player => room.submittedPlayers[player.id]).length
+function getActivePlayers (room) {
+  return room.players.filter(player => player.status === 'active')
 }
 
-function emitSubmissionStatus(roomCode) {
-  const room = rooms[roomCode]
-  if (!room) return
-
-  io.to(roomCode).emit('submission-status', {
-    submittedCount: getSubmittedCount(room),
-    totalPlayers: room.players.length
-  })
+function findPlayer (room, playerId) {
+  return room.players.find(player => player.id === playerId)
 }
 
-function getBlankCanvasDataUrl() {
+function getBlankCanvasDataUrl () {
   return 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 }
 
-function revealVoting(roomCode) {
+function emitSubmissionStatus (roomCode) {
+  const room = rooms[roomCode]
+  if (!room) return
+
+  const activePlayers = getActivePlayers(room)
+
+  io.to(roomCode).emit('submission-status', {
+    submittedCount: activePlayers.filter(
+      player => room.submittedPlayers[player.id]
+    ).length,
+    totalPlayers: activePlayers.length
+  })
+}
+
+function revealVoting (roomCode) {
   const room = rooms[roomCode]
   if (!room) return
   if (room.phase !== 'drawing' && room.phase !== 'force-submit') return
@@ -69,7 +77,9 @@ function revealVoting(roomCode) {
 
   room.phase = 'voting'
 
-  const revealedDrawings = room.players.map(player => ({
+  const activePlayers = getActivePlayers(room)
+
+  const revealedDrawings = activePlayers.map(player => ({
     playerId: player.id,
     playerName: player.name,
     imageData: room.drawings[player.id] || getBlankCanvasDataUrl()
@@ -78,7 +88,22 @@ function revealVoting(roomCode) {
   io.to(roomCode).emit('show-voting', revealedDrawings)
 }
 
-function startRoundTimer(roomCode) {
+function maybeRevealVoting (roomCode) {
+  const room = rooms[roomCode]
+  if (!room) return
+  if (room.phase !== 'drawing' && room.phase !== 'force-submit') return
+
+  const activePlayers = getActivePlayers(room)
+  const allSubmitted = activePlayers.every(
+    player => room.submittedPlayers[player.id]
+  )
+
+  if (allSubmitted) {
+    revealVoting(roomCode)
+  }
+}
+
+function startRoundTimer (roomCode) {
   const room = rooms[roomCode]
   if (!room) return
 
@@ -107,13 +132,65 @@ function startRoundTimer(roomCode) {
   }, 1000)
 }
 
-function finishVoting(roomCode) {
+function startNextRound (roomCode) {
+  const room = rooms[roomCode]
+  if (!room) return
+  if (!room.gameStarted) return
+
+  const activePlayers = getActivePlayers(room)
+
+  if (activePlayers.length <= 2) {
+    room.phase = 'results'
+
+    const imposterPlayer = findPlayer(room, room.imposterId)
+
+    io.to(roomCode).emit('round-result', {
+      tie: false,
+      matchWinner: 'imposter',
+      imposterName: imposterPlayer ? imposterPlayer.name : 'Unknown',
+      votedOutName: null,
+      voteResults: [],
+      remainingActiveCount: activePlayers.length
+    })
+    return
+  }
+
+  room.phase = 'drawing'
+  room.drawings = {}
+  room.submittedPlayers = {}
+  room.votes = {}
+
+  const chosenPrompt = getRandomItem(prompts)
+  room.currentWord = chosenPrompt.word
+  room.currentHint = chosenPrompt.hint
+
+  room.players.forEach(player => {
+    const playerSocket = io.sockets.sockets.get(player.id)
+    if (!playerSocket) return
+
+    const isImposter = player.id === room.imposterId
+
+    playerSocket.emit('role-data', {
+      role: isImposter ? 'imposter' : 'crewmate',
+      status: player.status,
+      word: player.status === 'active' && !isImposter ? room.currentWord : null,
+      hint: player.status === 'active' && isImposter ? room.currentHint : null
+    })
+  })
+
+  io.to(roomCode).emit('game-started')
+  emitSubmissionStatus(roomCode)
+  startRoundTimer(roomCode)
+}
+
+function finishVoting (roomCode) {
   const room = rooms[roomCode]
   if (!room) return
 
+  const activePlayers = getActivePlayers(room)
   const voteCounts = {}
 
-  room.players.forEach(player => {
+  activePlayers.forEach(player => {
     voteCounts[player.id] = 0
   })
 
@@ -137,21 +214,37 @@ function finishVoting(roomCode) {
     }
   }
 
-  const votedOutPlayer = room.players.find(player => player.id === votedOutPlayerId)
-  const imposterPlayer = room.players.find(player => player.id === room.imposterId)
+  let matchWinner = null
+  let votedOutPlayer = null
 
-  let winner
-  if (tie) {
-    winner = 'imposter'
-  } else if (votedOutPlayerId === room.imposterId) {
-    winner = 'crewmates'
-  } else {
-    winner = 'imposter'
+  if (!tie) {
+    votedOutPlayer = findPlayer(room, votedOutPlayerId)
+
+    if (votedOutPlayer) {
+      votedOutPlayer.status = 'spectator'
+    }
+
+    if (votedOutPlayerId === room.imposterId) {
+      matchWinner = 'crewmates'
+    }
   }
 
-  const voteResults = room.players.map(player => {
+  const remainingActivePlayers = getActivePlayers(room)
+  const imposterStillAlive = remainingActivePlayers.some(
+    player => player.id === room.imposterId
+  )
+
+  if (
+    !matchWinner &&
+    imposterStillAlive &&
+    remainingActivePlayers.length <= 2
+  ) {
+    matchWinner = 'imposter'
+  }
+
+  const voteResults = activePlayers.map(player => {
     const votedForId = room.votes[player.id]
-    const votedForPlayer = room.players.find(p => p.id === votedForId)
+    const votedForPlayer = findPlayer(room, votedForId)
 
     return {
       voterName: player.name,
@@ -162,28 +255,80 @@ function finishVoting(roomCode) {
   room.phase = 'results'
 
   io.to(roomCode).emit('round-result', {
-    winner,
     tie,
-    imposterName: imposterPlayer ? imposterPlayer.name : 'Unknown',
+    matchWinner,
+    imposterName: findPlayer(room, room.imposterId)?.name || 'Unknown',
     votedOutName: tie ? null : votedOutPlayer ? votedOutPlayer.name : null,
-    voteResults
+    voteResults,
+    remainingActiveCount: remainingActivePlayers.length
   })
-}
 
-function maybeRevealVoting(roomCode) {
-  const room = rooms[roomCode]
-  if (!room) return
-  if (room.phase !== 'drawing' && room.phase !== 'force-submit') return
-
-  const allSubmitted = room.players.every(player => room.submittedPlayers[player.id])
-
-  if (allSubmitted) {
-    revealVoting(roomCode)
+  if (!matchWinner) {
+    setTimeout(() => {
+      startNextRound(roomCode)
+    }, 4000)
   }
 }
 
 io.on('connection', socket => {
   console.log('User connected:', socket.id)
+
+  socket.on('rematch', () => {
+    const roomCode = socket.data.roomCode
+    if (!roomCode) return
+
+    const room = rooms[roomCode]
+    if (!room) return
+
+    if (room.hostId !== socket.id) return
+
+    if (room.players.length < 3) {
+      socket.emit('join-error', 'Need at least 3 players for a rematch')
+      return
+    }
+
+    room.gameStarted = true
+    room.phase = 'drawing'
+    room.drawings = {}
+    room.submittedPlayers = {}
+    room.votes = {}
+    room.timerSeconds = 30
+
+    if (room.timerInterval) {
+      clearInterval(room.timerInterval)
+      room.timerInterval = null
+    }
+
+    room.players.forEach(player => {
+      player.status = 'active'
+    })
+
+    const activePlayers = getActivePlayers(room)
+    const chosenImposter = getRandomItem(activePlayers)
+    const chosenPrompt = getRandomItem(prompts)
+
+    room.imposterId = chosenImposter.id
+    room.currentWord = chosenPrompt.word
+    room.currentHint = chosenPrompt.hint
+
+    room.players.forEach(player => {
+      const playerSocket = io.sockets.sockets.get(player.id)
+      if (!playerSocket) return
+
+      const isImposter = player.id === room.imposterId
+
+      playerSocket.emit('role-data', {
+        role: isImposter ? 'imposter' : 'crewmate',
+        status: player.status,
+        word: isImposter ? null : room.currentWord,
+        hint: isImposter ? room.currentHint : null
+      })
+    })
+
+    io.to(roomCode).emit('game-started')
+    emitSubmissionStatus(roomCode)
+    startRoundTimer(roomCode)
+  })
 
   socket.on('join-room', roomCode => {
     roomCode = roomCode.trim().toUpperCase()
@@ -223,7 +368,8 @@ io.on('connection', socket => {
 
     const player = {
       id: socket.id,
-      name: `Player ${room.players.length + 1}`
+      name: `Player ${room.players.length + 1}`,
+      status: 'lobby'
     }
 
     room.players.push(player)
@@ -246,8 +392,8 @@ io.on('connection', socket => {
       return
     }
 
-    if (room.players.length < 2) {
-      socket.emit('join-error', 'Need at least 2 players to start')
+    if (room.players.length < 3) {
+      socket.emit('join-error', 'Need at least 3 players to start')
       return
     }
 
@@ -257,8 +403,13 @@ io.on('connection', socket => {
     room.submittedPlayers = {}
     room.votes = {}
 
+    room.players.forEach(player => {
+      player.status = 'active'
+    })
+
+    const activePlayers = getActivePlayers(room)
+    const chosenImposter = getRandomItem(activePlayers)
     const chosenPrompt = getRandomItem(prompts)
-    const chosenImposter = getRandomItem(room.players)
 
     room.currentWord = chosenPrompt.word
     room.currentHint = chosenPrompt.hint
@@ -272,6 +423,7 @@ io.on('connection', socket => {
 
       playerSocket.emit('role-data', {
         role: isImposter ? 'imposter' : 'crewmate',
+        status: player.status,
         word: isImposter ? null : room.currentWord,
         hint: isImposter ? room.currentHint : null
       })
@@ -283,19 +435,22 @@ io.on('connection', socket => {
   })
 
   socket.on('submit-drawing', imageData => {
-  const roomCode = socket.data.roomCode
-  if (!roomCode) return
+    const roomCode = socket.data.roomCode
+    if (!roomCode) return
 
-  const room = rooms[roomCode]
-  if (!room || !room.gameStarted) return
-  if (room.phase !== 'drawing' && room.phase !== 'force-submit') return
+    const room = rooms[roomCode]
+    if (!room || !room.gameStarted) return
+    if (room.phase !== 'drawing' && room.phase !== 'force-submit') return
 
-  room.drawings[socket.id] = imageData
-  room.submittedPlayers[socket.id] = true
+    const player = findPlayer(room, socket.id)
+    if (!player || player.status !== 'active') return
 
-  emitSubmissionStatus(roomCode)
-  maybeRevealVoting(roomCode)
-})
+    room.drawings[socket.id] = imageData
+    room.submittedPlayers[socket.id] = true
+
+    emitSubmissionStatus(roomCode)
+    maybeRevealVoting(roomCode)
+  })
 
   socket.on('unsubmit-drawing', () => {
     const roomCode = socket.data.roomCode
@@ -303,6 +458,9 @@ io.on('connection', socket => {
 
     const room = rooms[roomCode]
     if (!room || !room.gameStarted || room.phase !== 'drawing') return
+
+    const player = findPlayer(room, socket.id)
+    if (!player || player.status !== 'active') return
 
     room.submittedPlayers[socket.id] = false
     emitSubmissionStatus(roomCode)
@@ -315,25 +473,29 @@ io.on('connection', socket => {
     const room = rooms[roomCode]
     if (!room || !room.gameStarted || room.phase !== 'voting') return
 
+    const activePlayers = getActivePlayers(room)
     const voterId = socket.id
 
-    const voterExists = room.players.some(player => player.id === voterId)
-    const votedPlayerExists = room.players.some(player => player.id === votedPlayerId)
+    const voterExists = activePlayers.some(player => player.id === voterId)
+    const votedPlayerExists = activePlayers.some(
+      player => player.id === votedPlayerId
+    )
 
     if (!voterExists || !votedPlayerExists) return
     if (voterId === votedPlayerId) return
 
     room.votes[voterId] = votedPlayerId
 
-    const votesCast = Object.keys(room.votes).length
-    const totalPlayers = room.players.length
+    const votesCast = activePlayers.filter(
+      player => room.votes[player.id]
+    ).length
 
     io.to(roomCode).emit('vote-status', {
       votesCast,
-      totalPlayers
+      totalPlayers: activePlayers.length
     })
 
-    const allVoted = room.players.every(player => room.votes[player.id])
+    const allVoted = activePlayers.every(player => room.votes[player.id])
     if (allVoted) {
       finishVoting(roomCode)
     }
@@ -352,6 +514,9 @@ io.on('connection', socket => {
       return
     }
 
+    const disconnectedPlayer = findPlayer(room, socket.id)
+    const disconnectedWasImposter = room.imposterId === socket.id
+
     room.players = room.players.filter(player => player.id !== socket.id)
     delete room.submittedPlayers[socket.id]
     delete room.drawings[socket.id]
@@ -359,15 +524,6 @@ io.on('connection', socket => {
 
     if (room.hostId === socket.id && room.players.length > 0) {
       room.hostId = room.players[0].id
-    }
-
-    if (room.imposterId === socket.id) {
-      room.imposterId = null
-    }
-
-    if (room.timerInterval && room.players.length <= 1) {
-      clearInterval(room.timerInterval)
-      room.timerInterval = null
     }
 
     if (room.players.length === 0) {
@@ -379,8 +535,35 @@ io.on('connection', socket => {
       return
     }
 
+    if (room.timerInterval && getActivePlayers(room).length <= 1) {
+      clearInterval(room.timerInterval)
+      room.timerInterval = null
+    }
+
+    if (disconnectedWasImposter && room.gameStarted) {
+      room.phase = 'results'
+      io.to(roomCode).emit('round-result', {
+        tie: false,
+        matchWinner: 'crewmates',
+        imposterName: disconnectedPlayer ? disconnectedPlayer.name : 'Unknown',
+        votedOutName: disconnectedPlayer ? disconnectedPlayer.name : null,
+        voteResults: [],
+        remainingActiveCount: getActivePlayers(room).length
+      })
+
+      room.gameStarted = false
+      room.imposterId = null
+      emitRoomData(roomCode)
+      console.log('User disconnected:', socket.id)
+      return
+    }
+
     if (room.gameStarted && room.phase === 'drawing') {
-      const allSubmitted = room.players.every(player => room.submittedPlayers[player.id])
+      const activePlayers = getActivePlayers(room)
+      const allSubmitted = activePlayers.every(
+        player => room.submittedPlayers[player.id]
+      )
+
       if (allSubmitted) {
         revealVoting(roomCode)
       } else {
@@ -389,15 +572,17 @@ io.on('connection', socket => {
     }
 
     if (room.gameStarted && room.phase === 'voting') {
-      const votesCast = Object.keys(room.votes).length
-      const totalPlayers = room.players.length
+      const activePlayers = getActivePlayers(room)
+      const votesCast = activePlayers.filter(
+        player => room.votes[player.id]
+      ).length
 
       io.to(roomCode).emit('vote-status', {
         votesCast,
-        totalPlayers
+        totalPlayers: activePlayers.length
       })
 
-      const allVoted = room.players.every(player => room.votes[player.id])
+      const allVoted = activePlayers.every(player => room.votes[player.id])
       if (allVoted) {
         finishVoting(roomCode)
       }
