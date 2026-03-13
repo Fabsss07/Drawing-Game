@@ -25,7 +25,7 @@ const prompts = [
   { word: 'School Item', hint: 'Used for learning' }
 ]
 
-function emitRoomData(roomCode) {
+function emitRoomData (roomCode) {
   const room = rooms[roomCode]
   if (!room) return
 
@@ -35,23 +35,23 @@ function emitRoomData(roomCode) {
   })
 }
 
-function getRandomItem(array) {
+function getRandomItem (array) {
   return array[Math.floor(Math.random() * array.length)]
 }
 
-function getActivePlayers(room) {
+function getActivePlayers (room) {
   return room.players.filter(player => player.status === 'active')
 }
 
-function findPlayer(room, playerId) {
+function findPlayer (room, playerId) {
   return room.players.find(player => player.id === playerId)
 }
 
-function getBlankCanvasDataUrl() {
+function getBlankCanvasDataUrl () {
   return 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 }
 
-function emitSubmissionStatus(roomCode) {
+function emitSubmissionStatus (roomCode) {
   const room = rooms[roomCode]
   if (!room) return
 
@@ -65,7 +65,7 @@ function emitSubmissionStatus(roomCode) {
   })
 }
 
-function revealVoting(roomCode) {
+function revealVoting (roomCode) {
   const room = rooms[roomCode]
   if (!room) return
   if (room.phase !== 'drawing' && room.phase !== 'force-submit') return
@@ -91,7 +91,7 @@ function revealVoting(roomCode) {
   })
 }
 
-function maybeRevealVoting(roomCode) {
+function maybeRevealVoting (roomCode) {
   const room = rooms[roomCode]
   if (!room) return
   if (room.phase !== 'drawing' && room.phase !== 'force-submit') return
@@ -106,7 +106,7 @@ function maybeRevealVoting(roomCode) {
   }
 }
 
-function startRoundTimer(roomCode) {
+function startRoundTimer (roomCode) {
   const room = rooms[roomCode]
   if (!room) return
 
@@ -135,7 +135,7 @@ function startRoundTimer(roomCode) {
   }, 1000)
 }
 
-function startNextRound(roomCode) {
+function startNextRound (roomCode) {
   const room = rooms[roomCode]
   if (!room) return
   if (!room.gameStarted) return
@@ -188,7 +188,7 @@ function startNextRound(roomCode) {
   startRoundTimer(roomCode)
 }
 
-function finishVoting(roomCode) {
+function finishVoting (roomCode) {
   const room = rooms[roomCode]
   if (!room) return
 
@@ -239,7 +239,11 @@ function finishVoting(roomCode) {
     player => player.id === room.imposterId
   )
 
-  if (!matchWinner && imposterStillAlive && remainingActivePlayers.length <= 2) {
+  if (
+    !matchWinner &&
+    imposterStillAlive &&
+    remainingActivePlayers.length <= 2
+  ) {
     matchWinner = 'imposter'
   }
 
@@ -332,9 +336,24 @@ io.on('connection', socket => {
     startRoundTimer(roomCode)
   })
 
-  socket.on('join-room', roomCode => {
+  socket.on('join-room', ({ roomCode, name }) => {
     roomCode = roomCode.trim().toUpperCase()
+
     if (!roomCode) return
+
+    const bannedWords = ['nigger', 'nigga', 'fuck', 'bitch', 'SuckANiggaD']
+
+    let cleanName = (name || '').trim().substring(0, 16)
+
+    if (!cleanName) {
+      cleanName = 'Player'
+    }
+
+    const lower = cleanName.toLowerCase()
+
+    if (bannedWords.some(word => lower.includes(word))) {
+      cleanName = 'Player'
+    }
 
     if (!rooms[roomCode]) {
       rooms[roomCode] = {
@@ -366,12 +385,9 @@ io.on('connection', socket => {
       return
     }
 
-    const alreadyInRoom = room.players.some(player => player.id === socket.id)
-    if (alreadyInRoom) return
-
     const player = {
       id: socket.id,
-      name: `Player ${room.players.length + 1}`,
+      name: cleanName,
       status: 'lobby'
     }
 
@@ -380,7 +396,6 @@ io.on('connection', socket => {
     socket.data.roomCode = roomCode
 
     emitRoomData(roomCode)
-    console.log(`Player ${socket.id} joined ${roomCode}`)
   })
 
   socket.on('start-game', () => {

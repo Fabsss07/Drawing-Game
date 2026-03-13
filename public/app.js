@@ -45,6 +45,7 @@ const app = document.querySelector('.app')
 const roleRevealOverlay = document.getElementById('roleRevealOverlay')
 const roleRevealTitle = document.getElementById('roleRevealTitle')
 const roleRevealPrompt = document.getElementById('roleRevealPrompt')
+const nameInput = document.getElementById('nameInput')
 
 let drawing = false
 let hasSubmittedDrawing = false
@@ -255,6 +256,17 @@ function showRoleReveal () {
 
 joinBtn.addEventListener('click', () => {
   const roomCode = roomInput.value.trim().toUpperCase()
+  const playerName = nameInput.value.trim()
+
+  if (!playerName) {
+    joinMessage.textContent = 'Enter a name'
+    return
+  }
+
+  if (playerName.length > 16) {
+    joinMessage.textContent = 'Name too long'
+    return
+  }
 
   if (!roomCode) {
     joinMessage.textContent = 'Enter a room code'
@@ -262,10 +274,13 @@ joinBtn.addEventListener('click', () => {
   }
 
   joinMessage.textContent = ''
+
+  socket.emit('join-room', {
+    roomCode,
+    name: playerName
+  })
+
   roomCodeText.textContent = roomCode
-
-  socket.emit('join-room', roomCode)
-
   joinScreen.classList.add('hidden')
   lobbyScreen.classList.remove('hidden')
 })
